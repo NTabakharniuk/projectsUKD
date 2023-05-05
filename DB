@@ -1,0 +1,146 @@
+//Завдання 0
+
+const express = require('express');
+const { Pool } = require('pg');
+const app = express();
+
+const pool = new Pool
+({
+    host: '8.tcp.ngrok.io',
+    port: 12611,
+    user: 'ukd_student',
+    password: 'password',
+    database: 'ukd_db'
+  });
+
+  app.get('/users', (req, res) => {
+    pool.query('SELECT * FROM users', (error, result) => {
+      if (error) {
+        res.status(500).json({ error });
+      } else {
+        res.json(result.rows);
+      }
+    });
+  });
+
+  app.listen(3000, () => {
+    console.log('Server is listening on port 3000');
+  });
+
+  //Завдання 1
+
+  pool.query(`
+  CREATE TABLE IF NOT EXISTS students (
+    id SERIAL PRIMARY KEY,
+    first_name TEXT,
+    last_name TEXT,
+    age INTEGER
+  )
+`, error => {
+  if (error) {
+    console.error('Error creating students table:', error);
+  } else {
+    console.log('Students table created');
+  }
+});
+
+app.post('/students', (req, res) => {
+    const { first_name, last_name, age } = req.body;
+    pool.query(`
+      INSERT INTO students (first_name, last_name, age)
+      VALUES ($1, $2, $3)
+      RETURNING *
+    `, [first_name, last_name, age], (error, result) => {
+      if (error) {
+        res.status(500).json({ error });
+      } else {
+        res.json(result.rows[0]);
+      }
+    });
+  });
+
+  app.get('/students', (req, res) => {
+    pool.query('SELECT * FROM students', (error, result) => {
+      if (error) {
+        res.status(500).json({ error });
+      } else {
+        res.json(result.rows);
+      }
+    });
+  });
+
+  //Завдання 2
+
+  app.post('/students', async (req, res) => {
+    const { firstName, lastName, age } = req.body;
+    const query = 'INSERT INTO students (first_name, last_name, age) VALUES ($1, $2, $3) RETURNING *';
+    try {
+      const result = await pool.query(query, [firstName, lastName, age]);
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Error adding student' });
+    }
+  });
+  
+  // Додамо декілька записів до таблиці студентів
+  app.post('/students/bulk', async (req, res) => {
+    const { students } = req.body;
+    const query = 'INSERT INTO students (first_name, last_name, age) VALUES ($1, $2, $3) RETURNING *';
+    const values = students.map(student => [student.firstName, student.lastName, student.age]);
+    try {
+      const result = await pool.query(query, values.flat());
+      res.status(201).json(result.rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Error adding students' });
+    }
+  });
+  
+  // Вибірка студентів, відсортованих за віком
+  app.get('/students', async (req, res) => {
+    const { order } = req.query;
+    const sortOrder = order === 'desc' ? 'DESC' : 'ASC';
+    const query = `SELECT * FROM students ORDER BY age ${sortOrder}`;
+    try {
+      const result = await pool.query(query);
+      res.status(200).json(result.rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Error getting students' });
+    }
+  });
+
+  // додамо декілька студентів
+const students = [
+    { firstName: 'Anna', lastName: 'Perkhach', age: 19 },
+    { firstName: 'Max', lastName: 'Kolin', age: 19 },
+    { firstName: 'Alina', lastName: 'Komir', age: 17 },
+  ];
+  await axios.post('/students/bulk', { students });
+  
+  // отримаємо список студентів, відсортованих за віком
+  const { data } = await axios.get('/students?order=asc');
+  console.log(data); // [{ id: 1, first_name: 'Anna', last_name: 'Perkhach'
+
+  // Вибірка всіх студентів з таблиці "students", відсортованих за віком від молодших до старших
+app.get('/students/youngest', async (req, res) => {
+    try {
+      const result = await pool.query('SELECT * FROM students ORDER BY age ASC');
+      res.json(result.rows);
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).send('Server error');
+    }
+  });
+  
+  // Вибірка всіх студентів з таблиці "students", відсортованих за віком від старших до молодших
+  app.get('/students/oldest', async (req, res) => {
+    try {
+      const result = await pool.query('SELECT * FROM students ORDER BY age DESC');
+      res.json(result.rows);
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).send('Server error');
+    }
+  });
